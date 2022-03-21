@@ -1,29 +1,24 @@
-/* Alta3 Research - Creating a slice from an array */
+/* RZFeeser | Alta3 Research
+   Slices relationship to arrays     */
 
 package main
 
 import "fmt"
 
 func main() {
+    array := [5]int{1, 2, 3, 4, 5}
+    slice := array[:]
 
-    myArray := [10]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9} // we need an array
+    //Modifying the slice
+    slice[1] = 7
+    fmt.Println("Modifying Slice")
+    fmt.Println("Array =", array)
+    fmt.Println("Slice =", slice)
 
-    mySlice1 := myArray[1:5] // slice from the 1st up to 5th
-
-    mySlice2 := mySlice1[0:2] // slicing a slice
-    mySlice3 := mySlice1[0:1] // slicing a slice
-
-    fmt.Println(mySlice1)
-
-    fmt.Println(mySlice2)
-    
-    mySlice2[1] = 22          // updating mySlice2 will also update mySlice1 and myArray
-    
-    fmt.Println(mySlice1)     // this now reads [1 22 3 4]
-    fmt.Println(mySlice2)     // this now reads [1 22 3 4]
-    fmt.Println(mySlice3)     // this now reads [???]
-    fmt.Println(myArray)      // this now reads [0 1 22 3 4 5 6 7 8 9]
-                              //      updating the slice updates the array
-
+    //Modifying the array. Would reflect back in slice too
+    array[1] = 2
+    fmt.Println("Modifying Underlying Array")
+    fmt.Println("Array =", array)
+    fmt.Println("Slice =", slice)
 }
 

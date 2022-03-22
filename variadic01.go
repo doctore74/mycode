@@ -11,6 +11,8 @@ import "fmt"
 // the "..." must appear at the END of any other arguments passed to the function
 func hello(names ...string) {
     
+    fmt.Printf("The type of names is %T\n", names)
+    
     // print any of the values passed in
     fmt.Print(names, " ")
     

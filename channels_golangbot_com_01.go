@@ -1,3 +1,5 @@
+// https://golangbot.com/channels/
+
 package main
 
 import (

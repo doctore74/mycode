@@ -1,44 +1,67 @@
 /* Alta3 Research | RZFeeser
-   Channels - A simple example.
-   Think of a channel like a wormhole. Anything placed into it,
-   is instantly moved between goroutines.*/
+   Channels - No channels, using a mutex  */
 
 package main
 
 import (
-    "fmt"
-    "math/rand"
-    "time"
+   "os"
+   "fmt"
+   "runtime"
+   "strconv"
+   "sync"
 )
 
+var accountBalance = 0    // balance for shared bank account
+var mutex = &sync.Mutex{} // mutual-exclusion lock
 
-// this wants a channel to be passed to it
-// think of a channel like a 'wormhole'
-func CalculateValue(values chan int) {
-    value := rand.Intn(10)  // create a random value
-    fmt.Println("Calculated Random Value: {}", value)
-    time.Sleep( time.Second * 10 ) // wait 10 seconds!
-    values <- value  // send our value back through the wormhole
-    // after the data is through the wormhole
-    fmt.Println("I run after the data is added to the channel")
+// critical-section code with explicit locking/unlocking
+func increaseBalance(amt int) {
+   mutex.Lock()
+   accountBalance += amt  // two operations: update and assignment
+   mutex.Unlock()
+}
+
+func reportAndExit(msg string) {
+   fmt.Println(msg)
+   os.Exit(-1) // all 1s in binary
 }
 
 func main() {
-    fmt.Println("Go Channel Tutorial")
+   if len(os.Args) < 2 {
+      reportAndExit("\nUsage: go run channels02.go <number of updates per thread>")
+   }
+   iterations, err := strconv.Atoi(os.Args[1])
+   if err != nil {
+      reportAndExit("Bad command-line argument: " + os.Args[1]);
+   }
 
-    // create an empty channel called "values" (UNBUFFERED)
-    values := make(chan int)
-    defer close(values)
+   var wg sync.WaitGroup  // wait group to ensure goroutine coordination
 
-    go CalculateValue(values) // pass our channel to our function
-    go CalculateValue(values)
-    go CalculateValue(values)
-    go CalculateValue(values)
+   // profiting increments the balance
+   wg.Add(1)           // increment WaitGroup counter
+   go func() {
+      defer wg.Done()  // invoke Done on the WaitGroup when finished
+      for i := 0; i < iterations ; i++ {
+         increaseBalance(1)
+         fmt.Println("Adding")
+         runtime.Gosched()  // yield to another goroutine
+         // using runtime.Gosched() will "yield" back to the main() thread
+         // and the increaseBalance(-1) function will run
+      }
+   }()
 
-    // wait until a value is returned
-    value := <-values // after 10 seconds a value will return
+   // spendy decrements the balance
+   wg.Add(1)           // increment WaitGroup counter
+   go func() {
+      defer wg.Done()
+      for i := 0; i < iterations; i++ {
+         increaseBalance(-1)
+         fmt.Println("Removing")
+         runtime.Gosched()  // be nice--yield
+      }
+   }()
 
-    time.Sleep( time.Second ) // wait a single second (after data is read from the channel)
-    fmt.Println(value) // I run after the data is read from the channel
+   wg.Wait()  // await completion of profiting and spendy
+   fmt.Println("Final balance: ", accountBalance)  // confirm final balance is zero
 }
 

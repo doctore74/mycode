@@ -1,42 +1,91 @@
 /* Alta3 Research | RZFeeser
-   Channels - Intro to buffered channels*/
+   Channels - coordinating data flows with channels  */
+
 
 package main
 
 import (
-    "fmt"
-    "math/rand"
-    "time"
+   "os"
+   "fmt"
+   "runtime"
+   "strconv"
+   "sync"
 )
 
+type bankOp struct { // bank operation: deposit or withdraw
+   howMuch int       // amount
+   confirm chan int  // confirmation channel
+}
 
-// this wants a channel to be passed to it
-// think of a channel like a 'wormhole'
-func CalculateValue(values chan int) {
-    value := rand.Intn(10)  // create a random value
-    fmt.Println("Calculated Random Value: {}", value)
-    time.Sleep( time.Second * 10 ) // wait 10 seconds!
-    values <- value  // send our value back through the wormhole
-    // after the data is through the wormhole
-    fmt.Println("I run after the data is added to the channel")
+var accountBalance = 0          // shared account
+var bankRequests chan *bankOp   // channel to banker
+
+func increaseBalance(amt int) int {
+   update := &bankOp{howMuch: amt, confirm: make(chan int)}
+   bankRequests <- update
+   newBalance := <-update.confirm
+   return newBalance
+}
+
+// For now a no-op, but could save balance to a file with a timestamp.
+func logBalance(current int) { }
+
+func reportAndExit(msg string) {
+   fmt.Println(msg)
+   os.Exit(-1) // all 1s in binary
 }
 
 func main() {
-    fmt.Println("Go Channel Tutorial")
+   if len(os.Args) < 2 {
+      reportAndExit("\nUsage: go run channels03.go <number of updates per thread>")
+   }
+   iterations, err := strconv.Atoi(os.Args[1])
+   if err != nil {
+      reportAndExit("Bad command-line argument: " + os.Args[1]);
+   }
 
-    // create an empty channel called "values" with a buffer of 4
-    values := make(chan int, 4)
-    defer close(values)
+   bankRequests = make(chan *bankOp, 8) // 8 is channel buffer size
 
-    go CalculateValue(values) // pass our channel to our function
-    go CalculateValue(values)
-    go CalculateValue(values)
-    go CalculateValue(values)
+   var wg sync.WaitGroup
+   // The banker: handles all requests for deposits and withdrawals through a channel.
+   go func() {
+      for {
+         /* The select construct is non-blocking:
+            -- if there's something to read from a channel, do so
+            -- otherwise, fall through to the next case, if any */
+         select {
+         case request := <-bankRequests:
+            accountBalance += request.howMuch   // update account
+            request.confirm <- accountBalance   // confirm with current balance
+         }
+      }
+   }()
 
-    // wait until a value is returned
-    value := <-values // after 10 seconds a value will return
+   // profiting increments the balance
+   wg.Add(1)           // increment WaitGroup counter
+   go func() {
+      defer wg.Done()  // invoke Done on the WaitGroup when finished
+      for i := 0; i < iterations ; i++ {
+         newBalance := increaseBalance(1)
+         fmt.Println("Adding")
+         logBalance(newBalance)
+         runtime.Gosched()  // yield to another goroutine
+      }
+   }()
 
-    time.Sleep( time.Second ) // wait a single second (after data is read from the channel)
-    fmt.Println(value) // I run after the data is read from the channel
+   // spendy decrements the balance
+   wg.Add(1)           // increment WaitGroup counter
+   go func() {
+      defer wg.Done()
+      for i := 0; i < iterations; i++ {
+         newBalance := increaseBalance(-1)
+         fmt.Println("Removing")
+         logBalance(newBalance)
+         runtime.Gosched()  // be nice--yield
+      }
+   }()
+
+   wg.Wait()  // await completion of profiting and spendy
+   fmt.Println("Final balance: ", accountBalance) // confirm the balance is zero
 }
 
